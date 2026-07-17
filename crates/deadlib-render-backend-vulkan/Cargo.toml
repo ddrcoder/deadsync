@@ -6,7 +6,6 @@ license = "GPL-3.0"
 
 [dependencies]
 ash = { version = "0.38.0", features = ["linked"] }
-ash-window = "0.13.0"
 bytemuck = { version = "1.25.1", features = ["derive"] }
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-render = { path = "../deadlib-render" }
@@ -14,6 +13,9 @@ glam = "0.33.2"
 image = "0.25.10"
 log = "0.4.33"
 winit = "0.30.13"
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+raw-window-metal = "1.1.0"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = ["Win32_System_Performance"] }

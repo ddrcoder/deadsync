@@ -1,7 +1,11 @@
 use ash::{
     Device, Entry, Instance,
+    ext::metal_surface,
     google::display_timing,
-    khr::{calibrated_timestamps, surface, swapchain},
+    khr::{
+        android_surface, calibrated_timestamps, surface, swapchain, wayland_surface, win32_surface,
+        xcb_surface, xlib_surface,
+    },
     vk,
 };
 use deadlib_render::{
@@ -19,7 +23,7 @@ use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc, time::Instant
 use windows::Win32::System::Performance;
 use winit::{
     dpi::PhysicalSize,
-    raw_window_handle::{HasDisplayHandle, HasWindowHandle},
+    raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle},
     window::Window,
 };
 
@@ -2998,7 +3002,7 @@ fn create_instance(
         .api_version(vk::API_VERSION_1_3);
 
     let mut extension_names =
-        ash_window::enumerate_required_extensions(window.display_handle()?.as_raw())?.to_vec();
+        required_surface_extensions(window.display_handle()?.as_raw())?.to_vec();
     let mut debug_utils_enabled = false;
     let mut layers_names_raw: Vec<*const ffi::c_char> = vec![];
     if gfx_debug_enabled {
@@ -3087,16 +3091,138 @@ fn create_surface(
     instance: &Instance,
     window: &Window,
 ) -> Result<vk::SurfaceKHR, Box<dyn Error>> {
-    // SAFETY: The raw display/window handles come directly from `window` and remain valid for the
-    // duration of the call; the returned surface is owned by `instance`.
+    let display = window.display_handle()?.as_raw();
+    let window = window.window_handle()?.as_raw();
+    // SAFETY: Both raw handles come from the live winit window. The returned surface is destroyed
+    // before its entry and instance by the renderer's normal teardown order.
     unsafe {
-        Ok(ash_window::create_surface(
-            entry,
-            instance,
-            window.display_handle()?.as_raw(),
-            window.window_handle()?.as_raw(),
-            None,
+        Ok(create_surface_from_handles(
+            entry, instance, display, window,
         )?)
+    }
+}
+
+fn required_surface_extensions(
+    display: RawDisplayHandle,
+) -> Result<&'static [*const ffi::c_char], vk::Result> {
+    match display {
+        RawDisplayHandle::Windows(_) => {
+            const EXTENSIONS: [*const ffi::c_char; 2] =
+                [surface::NAME.as_ptr(), win32_surface::NAME.as_ptr()];
+            Ok(&EXTENSIONS)
+        }
+        RawDisplayHandle::Wayland(_) => {
+            const EXTENSIONS: [*const ffi::c_char; 2] =
+                [surface::NAME.as_ptr(), wayland_surface::NAME.as_ptr()];
+            Ok(&EXTENSIONS)
+        }
+        RawDisplayHandle::Xlib(_) => {
+            const EXTENSIONS: [*const ffi::c_char; 2] =
+                [surface::NAME.as_ptr(), xlib_surface::NAME.as_ptr()];
+            Ok(&EXTENSIONS)
+        }
+        RawDisplayHandle::Xcb(_) => {
+            const EXTENSIONS: [*const ffi::c_char; 2] =
+                [surface::NAME.as_ptr(), xcb_surface::NAME.as_ptr()];
+            Ok(&EXTENSIONS)
+        }
+        RawDisplayHandle::Android(_) => {
+            const EXTENSIONS: [*const ffi::c_char; 2] =
+                [surface::NAME.as_ptr(), android_surface::NAME.as_ptr()];
+            Ok(&EXTENSIONS)
+        }
+        RawDisplayHandle::AppKit(_) | RawDisplayHandle::UiKit(_) => {
+            const EXTENSIONS: [*const ffi::c_char; 2] =
+                [surface::NAME.as_ptr(), metal_surface::NAME.as_ptr()];
+            Ok(&EXTENSIONS)
+        }
+        _ => Err(vk::Result::ERROR_EXTENSION_NOT_PRESENT),
+    }
+}
+
+unsafe fn create_surface_from_handles(
+    entry: &Entry,
+    instance: &Instance,
+    display: RawDisplayHandle,
+    window: RawWindowHandle,
+) -> Result<vk::SurfaceKHR, vk::Result> {
+    match (display, window) {
+        (RawDisplayHandle::Windows(_), RawWindowHandle::Win32(window)) => {
+            let info = vk::Win32SurfaceCreateInfoKHR::default()
+                .hwnd(window.hwnd.get())
+                .hinstance(
+                    window
+                        .hinstance
+                        .ok_or(vk::Result::ERROR_INITIALIZATION_FAILED)?
+                        .get(),
+                );
+            // SAFETY: The window handle is valid for this call and the loader matches `instance`.
+            unsafe {
+                win32_surface::Instance::new(entry, instance).create_win32_surface(&info, None)
+            }
+        }
+        (RawDisplayHandle::Wayland(display), RawWindowHandle::Wayland(window)) => {
+            let info = vk::WaylandSurfaceCreateInfoKHR::default()
+                .display(display.display.as_ptr())
+                .surface(window.surface.as_ptr());
+            // SAFETY: The display and window handles are a matching live Wayland pair.
+            unsafe {
+                wayland_surface::Instance::new(entry, instance).create_wayland_surface(&info, None)
+            }
+        }
+        (RawDisplayHandle::Xlib(display), RawWindowHandle::Xlib(window)) => {
+            let info = vk::XlibSurfaceCreateInfoKHR::default()
+                .dpy(
+                    display
+                        .display
+                        .ok_or(vk::Result::ERROR_INITIALIZATION_FAILED)?
+                        .as_ptr(),
+                )
+                .window(window.window);
+            // SAFETY: The display and window handles are a matching live Xlib pair.
+            unsafe { xlib_surface::Instance::new(entry, instance).create_xlib_surface(&info, None) }
+        }
+        (RawDisplayHandle::Xcb(display), RawWindowHandle::Xcb(window)) => {
+            let info = vk::XcbSurfaceCreateInfoKHR::default()
+                .connection(
+                    display
+                        .connection
+                        .ok_or(vk::Result::ERROR_INITIALIZATION_FAILED)?
+                        .as_ptr(),
+                )
+                .window(window.window.get());
+            // SAFETY: The connection and window handles are a matching live XCB pair.
+            unsafe { xcb_surface::Instance::new(entry, instance).create_xcb_surface(&info, None) }
+        }
+        (RawDisplayHandle::Android(_), RawWindowHandle::AndroidNdk(window)) => {
+            let info =
+                vk::AndroidSurfaceCreateInfoKHR::default().window(window.a_native_window.as_ptr());
+            // SAFETY: The native window remains live for the lifetime of the Vulkan surface.
+            unsafe {
+                android_surface::Instance::new(entry, instance).create_android_surface(&info, None)
+            }
+        }
+        #[cfg(target_os = "macos")]
+        (RawDisplayHandle::AppKit(_), RawWindowHandle::AppKit(window)) => {
+            // SAFETY: The AppKit handle supplied by winit points to a live NSView.
+            let layer = unsafe { raw_window_metal::Layer::from_ns_view(window.ns_view) };
+            let info = vk::MetalSurfaceCreateInfoEXT::default().layer(layer.as_ptr().as_ptr());
+            // SAFETY: `layer` remains live through creation; Vulkan retains the CAMetalLayer.
+            unsafe {
+                metal_surface::Instance::new(entry, instance).create_metal_surface(&info, None)
+            }
+        }
+        #[cfg(target_os = "ios")]
+        (RawDisplayHandle::UiKit(_), RawWindowHandle::UiKit(window)) => {
+            // SAFETY: The UIKit handle points to a live UIView.
+            let layer = unsafe { raw_window_metal::Layer::from_ui_view(window.ui_view) };
+            let info = vk::MetalSurfaceCreateInfoEXT::default().layer(layer.as_ptr().as_ptr());
+            // SAFETY: `layer` remains live through creation; Vulkan retains the CAMetalLayer.
+            unsafe {
+                metal_surface::Instance::new(entry, instance).create_metal_surface(&info, None)
+            }
+        }
+        _ => Err(vk::Result::ERROR_EXTENSION_NOT_PRESENT),
     }
 }
 
