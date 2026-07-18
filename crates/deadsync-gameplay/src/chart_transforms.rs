@@ -835,8 +835,12 @@ pub fn apply_uncommon_masks_with_masks(
     _player: usize,
 ) {
     if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
-        let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
-        notes.retain(|note| note.row_index % rows_per_beat == 0);
+        // "Little" keeps only 4th notes (those that land on a beat). `row_index`
+        // is a compact per-measure line index (its beat spacing varies by
+        // measure density), not a fixed 48-rows-per-beat tick, so the on-beat
+        // test must use the note's actual `beat`, not `row_index % ROWS_PER_BEAT`.
+        let rows_per_beat = ROWS_PER_BEAT.max(1);
+        notes.retain(|note| beat_to_note_row(note.beat) % rows_per_beat == 0);
     }
 
     if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 {

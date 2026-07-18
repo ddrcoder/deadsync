@@ -14960,6 +14960,40 @@ mod tests {
     }
 
     #[test]
+    fn little_keeps_on_beat_notes_by_beat_not_compact_row_index() {
+        // Real charts store notes with a compact per-measure `row_index` whose
+        // beat spacing depends on the measure's minimized row count, not a fixed
+        // 48-rows-per-beat tick. An 8th-note measure minimizes to 8 rows, so the
+        // on-beat 4th notes land on compact indices 0/2/4/6 (beats 0/1/2/3) and
+        // the off-beats on 1/3/5/7 (beats 0.5/1.5/2.5/3.5). "Little" must key off
+        // `beat`; the old `row_index % 48` test kept only index 0.
+        let timing = test_timing(ROWS_PER_BEAT as usize);
+        let mut notes: Vec<Note> = (0..8usize)
+            .map(|i| test_note_at(NoteType::Tap, None, false, i, i as f32 * 0.5))
+            .collect();
+        for (column, note) in notes.iter_mut().enumerate() {
+            note.column = column % 4;
+        }
+
+        apply_uncommon_masks_with_masks(
+            &mut notes,
+            0,
+            REMOVE_MASK_BIT_LITTLE,
+            0,
+            &timing,
+            0,
+            4,
+            &[],
+            None,
+            0,
+        );
+
+        let mut kept_beats: Vec<f32> = notes.iter().map(|note| note.beat).collect();
+        kept_beats.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert_eq!(kept_beats, vec![0.0, 1.0, 2.0, 3.0]);
+    }
+
+    #[test]
     fn uncommon_insert_and_hold_masks_delegate_to_transforms() {
         let timing = test_timing(ROWS_PER_BEAT as usize * 3);
         let mut notes = vec![
