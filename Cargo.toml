@@ -150,6 +150,10 @@ zstd = "0.14.4"
 # StepManiaX's SDK depends on hidapi directly. Route it through the same HID
 # transport as our other devices until the SDK can omit its built-in backend.
 hidapi = { path = "crates/deadlib-hid/hidapi-compat" }
+# Retry the SMX read-handle open after a hot-plug permission race, so pads
+# powered on while the game runs connect reliably. Drop once
+# https://github.com/fchorney/rustmaniax-sdk/pull/15 is released.
+rustmaniax-sdk = { git = "https://github.com/ddrcoder/rustmaniax-sdk", branch = "fix/retry-read-open-after-hotplug" }
 
 [build-dependencies]
 fs_extra = "1.3.0"
