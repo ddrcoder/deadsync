@@ -998,6 +998,11 @@ impl Vm {
                 }
             }
         }
+        // The native loadfile, dofile and require read source the embedder
+        // never sees, exactly like the io library.
+        if let Some(observe) = self.process_library_observer {
+            observe();
+        }
         let index = self.loads.len() - 1;
         debug_assert_eq!(self.loads[index].owner, owner);
         let file = self.loads[index].file.expect("active file reader");
