@@ -155,6 +155,7 @@ fn command_body(out: &mut String, commands: &str) {
 /// A 3.95 `.sprite` file: `[Sprite]` with `Texture`, `FrameNNNN`, `DelayNNNN`.
 /// Returns the `Texture=` and `Frames=` fields of a `Def.Sprite` table.
 fn sprite_file(path: &Path) -> Option<String> {
+    crate::bake_inputs::file(path);
     let bytes = std::fs::read(path).ok()?;
     let text = String::from_utf8_lossy(&bytes);
     let mut texture = None;
