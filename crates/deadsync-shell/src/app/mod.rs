@@ -1938,6 +1938,7 @@ pub struct App {
     profile_import: crate::profile_import::Service,
     profile_load: crate::profile_load::Service,
     content_reload: crate::content_reload::Service,
+    song_watch: crate::song_watch::Service,
     apply_replaygain: crate::apply_replaygain::Service,
     heart_rate: crate::heart_rate::Runtime,
     twitch: crate::twitch::Runtime,
@@ -4623,6 +4624,10 @@ impl App {
                 &self.dirs,
                 self.audio.is_available(),
             );
+            if !self.song_watch.is_started() {
+                self.song_watch
+                    .start(song_loading::collect_song_scan_roots(&self.dirs.songs_dir()));
+            }
         }
         let smx_assignment = matches!(
             self.state.screens.current_screen,
@@ -5784,6 +5789,7 @@ impl App {
             profile_import: crate::profile_import::Service::default(),
             profile_load: crate::profile_load::Service::default(),
             content_reload: crate::content_reload::Service::default(),
+            song_watch: crate::song_watch::Service::default(),
             apply_replaygain: crate::apply_replaygain::Service::default(),
             heart_rate: crate::heart_rate::Runtime::default(),
             twitch: crate::twitch::Runtime::default(),
@@ -6075,19 +6081,25 @@ impl App {
                         ContentRequest::ReloadLibrary {
                             songs_root,
                             courses_root,
-                        } => self.content_reload.start_library(
-                            songs_root,
-                            courses_root,
-                            self.audio.is_available(),
-                        ),
+                        } => {
+                            self.song_watch.note_reload(None);
+                            self.content_reload.start_library(
+                                songs_root,
+                                courses_root,
+                                self.audio.is_available(),
+                            );
+                        }
                         ContentRequest::ReloadSongDirs {
                             songs_root,
                             pack_dirs,
-                        } => self.content_reload.start_song_dirs(
-                            songs_root,
-                            pack_dirs,
-                            self.audio.is_available(),
-                        ),
+                        } => {
+                            self.song_watch.note_reload(Some(&pack_dirs));
+                            self.content_reload.start_song_dirs(
+                                songs_root,
+                                pack_dirs,
+                                self.audio.is_available(),
+                            );
+                        }
                         ContentRequest::ReloadSong { simfile_path } => {
                             match crate::content_reload::reload_song(&simfile_path) {
                                 Ok(song_packs) => {
