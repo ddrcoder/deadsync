@@ -48,6 +48,13 @@ impl AppDirs {
         self.data_dir.join("save").join("screenshots")
     }
 
+    /// Left by `deadsync --reload-songs` for the running game, which removes
+    /// it and reloads the songs it asks for.
+    #[must_use]
+    pub fn song_reload_request_path(&self) -> PathBuf {
+        self.data_dir.join("save").join("reload_songs.txt")
+    }
+
     #[must_use]
     pub fn current_screen_path(&self) -> PathBuf {
         self.data_dir.join("save").join("current_screen.txt")

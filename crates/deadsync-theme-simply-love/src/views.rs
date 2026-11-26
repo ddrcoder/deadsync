@@ -904,6 +904,8 @@ pub struct SelectMusicRuntimeView {
     pub unlock_downloads_available: Option<bool>,
     /// Completed download event emitted only when the worker queue changes.
     pub ready_song_reload_dirs: Option<Vec<PathBuf>>,
+    /// A songs-and-courses reload asked for from outside the game.
+    pub reload_library: bool,
 }
 
 impl Default for SelectMusicRuntimeView {
@@ -923,6 +925,7 @@ impl Default for SelectMusicRuntimeView {
             leaderboard: None,
             unlock_downloads_available: None,
             ready_song_reload_dirs: None,
+            reload_library: false,
         }
     }
 }

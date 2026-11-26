@@ -749,6 +749,7 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     if let Some(ready_dirs) = view.ready_song_reload_dirs {
         state.ready_song_reload_dirs.extend(ready_dirs);
     }
+    state.library_reload_requested |= view.reload_library;
 }
 
 pub fn sync_profile_picker(state: &mut State, view: ProfilePickerView) {
@@ -1846,6 +1847,7 @@ pub struct State {
     scorebox_presentation: [gs_scorebox::SelectMusicScoreboxPresentation; 2],
     unlock_downloads_available: bool,
     ready_song_reload_dirs: Vec<PathBuf>,
+    library_reload_requested: bool,
     sync_graph_mode: SyncGraphMode,
     sync_graph_orientation: GraphOrientation,
     sync_graph_origin: GraphOrigin,
@@ -4299,6 +4301,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         scorebox_presentation: Default::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
+        library_reload_requested: false,
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
         sync_graph_orientation: GraphOrientation::Vertical,
         sync_graph_origin: GraphOrigin::Bottom,
@@ -4554,6 +4557,7 @@ pub fn init_placeholder() -> State {
         scorebox_presentation: Default::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
+        library_reload_requested: false,
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
         sync_graph_orientation: GraphOrientation::Vertical,
         sync_graph_origin: GraphOrigin::Bottom,
@@ -11717,6 +11721,12 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     if let Some(overlay) = state.profile_switch_overlay.as_mut() {
         profile_boxes::update(overlay, dt);
         return ThemeEffect::None;
+    }
+    if state.library_reload_requested && !srpg_shop_overlay_visible(state) {
+        // The library reload covers any pack that was waiting for its own.
+        state.library_reload_requested = false;
+        state.ready_song_reload_dirs.clear();
+        return start_reload_songs_and_courses(state);
     }
     let reload_dirs = take_ready_song_reload_dirs(state);
     if !reload_dirs.is_empty() {

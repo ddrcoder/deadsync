@@ -149,6 +149,12 @@ fn resolve_show_console() -> bool {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = deadsync_updater::cli::UpdaterCli::from_env();
+    if let Some(packs) = deadsync_shell::song_reload_request::packs_from_args(&cli.remaining) {
+        // Leaves a note for the game that is already running, and exits.
+        let dirs = deadsync_config::dirs::AppDirs::resolve(None)?;
+        deadsync_shell::song_reload_request::write(&dirs.song_reload_request_path(), &packs)?;
+        return Ok(());
+    }
     let live_case = deadsync_shell::live_case::LiveCase::from_args(
         &cli.remaining,
         deadsync_shell::live_case::BuildIdentity {

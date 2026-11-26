@@ -611,7 +611,7 @@ impl App {
             deadsync_online::runtime::unlock_downloads_available(policy.auto_download_unlocks)
         });
         self.select_music_unlock_rebuild = false;
-        let ready_song_reload_dirs =
+        let mut ready_song_reload_dirs =
             deadsync_online::runtime::take_ready_song_reload_request_if_changed(
                 self.select_music_ready_reload_generation,
             )
@@ -619,6 +619,23 @@ impl App {
                 self.select_music_ready_reload_generation = generation;
                 dirs
             });
+        // `deadsync --reload-songs`, run beside the game. Left on disk while
+        // the reload service is busy: it refuses a second job.
+        let mut reload_library = false;
+        if !self.content_reload.is_busy() {
+            use crate::song_reload_request::Request;
+            match self.song_reload_request.poll(
+                &self.dirs.song_reload_request_path(),
+                &self.dirs.songs_dir(),
+                Instant::now(),
+            ) {
+                Some(Request::Library) => reload_library = true,
+                Some(Request::Packs(packs)) => {
+                    ready_song_reload_dirs.get_or_insert_default().extend(packs);
+                }
+                None => {}
+            }
+        }
         select_music::sync_runtime_view(
             &mut self.state.screens.select_music_state,
             SelectMusicRuntimeView {
@@ -638,6 +655,7 @@ impl App {
                 leaderboard,
                 unlock_downloads_available,
                 ready_song_reload_dirs,
+                reload_library,
             },
         );
     }
