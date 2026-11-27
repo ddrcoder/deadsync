@@ -44,6 +44,7 @@ deadsync-version = { path = "../deadsync-version" }
 image = "0.25.10"
 hashbrown = "0.17.1"
 log = "0.4.35"
+notify = "9.0.0"
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 rand = "0.10.4"
 rustc-hash = "2.1.3"

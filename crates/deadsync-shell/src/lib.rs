@@ -55,6 +55,7 @@ mod session_results;
 mod smx_config;
 mod song_loading;
 mod song_search;
+mod song_watch;
 mod stutter_diag;
 mod sync_analysis;
 mod sync_analysis_cache;
